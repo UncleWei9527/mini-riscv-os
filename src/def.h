@@ -15,3 +15,25 @@
   {                                                                            \
     asm volatile("csrw " #reg ",%0" : : "r"(val));                             \
   }
+struct Context {
+  unsigned int ra;
+  unsigned int sp;
+
+  unsigned int s0;
+  unsigned int s1;
+  unsigned int s2;
+  unsigned int s3;
+  unsigned int s4;
+  unsigned int s5;
+  unsigned int s6;
+  unsigned int s7;
+  unsigned int s8;
+  unsigned int s9;
+  unsigned int s10;
+  unsigned int s11;
+};
+struct Task {
+  struct Context ctx;
+  // int state; // 0 空闲 1 运行就绪
+  char stack[4096];
+};

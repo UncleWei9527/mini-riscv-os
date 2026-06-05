@@ -6,8 +6,8 @@ QEMU = qemu-system-riscv32
 QFLAGS = -machine virt -bios none -kernel os.elf -nographic
 
 # 1. 核心编译规则
-os.elf: src/entry.S src/start.c src/main.c os.ld src/trap.S src/def.h 
-	$(CC) $(CFLAGS) -T os.ld src/entry.S src/start.c src/main.c src/trap.S -o os.elf
+os.elf: src/entry.S src/start.c src/main.c os.ld src/trap.S src/def.h src/switch.S  
+	$(CC) $(CFLAGS) -T os.ld src/entry.S src/start.c src/main.c src/trap.S src/switch.S -o os.elf
 
 # 2. 清理
 clean:

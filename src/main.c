@@ -1,4 +1,5 @@
 #include "def.h"
+extern void switch_to(struct Context *old_context, struct Context *new_context);
 void uart_putc(char c) { UARTC = c; }
 void print_string(const char *s) {
   while (*s) {
@@ -6,6 +7,56 @@ void print_string(const char *s) {
     s++;
   }
 }
+void print_int(unsigned int cnt) {
+  if (cnt == 0) {
+    uart_putc('0');
+    return;
+  }
+  char buf[13];
+  int i = 0;
+  while (cnt) {
+    buf[i++] = cnt % 10;
+    cnt /= 10;
+  }
+  while (i) {
+    uart_putc('0' + buf[--i]);
+  }
+}
+struct Task task1, task2;
+struct Task *current_task;
+void delay(int times) {
+  for (volatile int i = 0; i < times; i++) {
+  }
+}
+void task_func1() {
+  int cnt = 0;
+  w_csr(sstatus, r_csr(sstatus) | (1 << 1));
+  while (1) {
+    print_string("func1 is working!!! cnt :");
+    print_int(cnt++);
+    print_string("\n");
+    delay(50000000);
+  }
+}
+void task_func2() {
+  w_csr(sstatus, r_csr(sstatus) | (1 << 1));
+  int cnt = 0;
+  while (1) {
+    print_string("func2 is working!!! cnt:");
+    print_int(cnt++);
+    print_string("\n");
+    delay(50000000);
+  }
+}
+void task_init() {
+  task1.ctx.ra = (unsigned int)task_func1;
+  task2.ctx.ra = (unsigned int)task_func2;
+
+  task1.ctx.sp = (unsigned int)(&task1.stack[4095]);
+  task2.ctx.sp = (unsigned int)(&task2.stack[4095]);
+  current_task = &task1;
+}
+
 void trap_handler() {
 
   unsigned int sepc = r_csr(sepc); // 中断sepc 指向下一条指令 异常指向错误的指令
@@ -15,6 +66,13 @@ void trap_handler() {
   if (is_interupt) {
     print_string("received a interrupt !!!!\n");
     w_csr(sip, 0); // 关掉门铃
+    struct Task *old_task = current_task;
+    if (current_task == &task1) {
+      current_task = &task2;
+    } else
+      current_task = &task1;
+    switch_to(&old_task->ctx, &current_task->ctx);
+
   } else {
     if (cause_code == 9) {
       print_string("system call from S-Mode \n");
@@ -30,7 +88,12 @@ int main() {
   print_string("Hello RISCV OS!!!");
   asm volatile("ecall");
   print_string("after trap_handler\n");
+
+  task_init();
+  struct Context dummy_context;
+  switch_to(&dummy_context, &task1.ctx);
   while (1) {
+    print_string("never reach main loop !!!\n");
   }
   return 0;
 }
