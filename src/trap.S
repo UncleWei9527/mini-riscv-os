@@ -71,3 +71,36 @@ trap_vector:
   
   addi sp,sp,128 
   sret 
+
+  .align 4 
+  .global timervec 
+  timervec:
+    #只动用了 a0 ,a1,a2,a3  只保存这几个 
+    csrrw a0,mscratch,a0 
+
+    sw a1,0(a0)
+    sw a2,4(a0)
+    sw a3,8(a0)
+
+  #重置闹钟 
+    lw a1,12(a0)#timcmp地址
+    lw a2,16(a0)#闹钟间隔时间
+
+    lw a3,0(a1) #闹钟低位 
+    add a3,a3,a2 
+    sw a3,0(a1)
+
+    sltu a2,a3,a2#判断是否进位
+    lw a3,4(a1)#进高位
+    add a3,a3,a2 #a2表示是否进位 
+    sw a3,4(a1)#更新回timecmp 低位
+
+    li a1,2 
+    csrw sip,a1 
+
+    lw a3,8(a0)
+    lw a2,4(a0)
+    lw a1,0(a0)
+    csrrw a0,mscratch ,a0 
+    mret 
+    
