@@ -22,30 +22,31 @@ void print_int(unsigned int cnt) {
     uart_putc('0' + buf[--i]);
   }
 }
-struct Task task1, task2;
-struct Task *current_task;
+
 void delay(int times) {
   for (volatile int i = 0; i < times; i++) {
   }
 }
+struct Task task1, task2;
+struct Task *current_task;
 void task_func1() {
   int cnt = 0;
-  w_csr(sstatus, r_csr(sstatus) | (1 << 1));
+  w_csr(sstatus, r_csr(sstatus) | STATUS_SIE);
   while (1) {
     print_string("func1 is working!!! cnt :");
     print_int(cnt++);
     print_string("\n");
-    delay(50000000);
+    delay(500000);
   }
 }
 void task_func2() {
-  w_csr(sstatus, r_csr(sstatus) | (1 << 1));
+  w_csr(sstatus, r_csr(sstatus) | STATUS_SIE);
   int cnt = 0;
   while (1) {
     print_string("func2 is working!!! cnt:");
     print_int(cnt++);
     print_string("\n");
-    delay(50000000);
+    delay(500000);
   }
 }
 void task_init() {
@@ -61,8 +62,8 @@ void trap_handler() {
 
   unsigned int sepc = r_csr(sepc); // 中断sepc 指向下一条指令 异常指向错误的指令
   unsigned int cause = r_csr(scause);
-  int is_interupt = (cause & 0x80000000) != 0;
-  unsigned int cause_code = (cause & 0x7fffffff);
+  int is_interupt = (cause & CAUSE_INT_MASK) != 0;
+  unsigned int cause_code = (cause & CAUSE_CODE_MASK);
   if (is_interupt) {
     print_string("received a interrupt !!!!\n");
     w_csr(sip, 0); // 关掉门铃
@@ -86,7 +87,6 @@ extern void trap_vector();
 int main() {
   w_csr(stvec, (unsigned int)trap_vector);
   print_string("Hello RISCV OS!!!");
-  asm volatile("ecall");
   print_string("after trap_handler\n");
 
   task_init();

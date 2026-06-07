@@ -94,7 +94,7 @@ trap_vector:
     lw a3,4(a1)#进高位
     add a3,a3,a2 #a2表示是否进位 
     sw a3,4(a1)#更新回timecmp 低位
-
+    # 模拟软中断给S态
     li a1,2 
     csrw sip,a1 
 

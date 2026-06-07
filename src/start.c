@@ -24,22 +24,21 @@ void time_init() {
   *mtime_cmp_low = 0xffffffff;
   *mtime_cmp_high = (unsigned int)(next_time >> 32);
   *mtime_cmp_low = next_time;
+  // 开启定时器中断
+  w_csr(mie, r_csr(mie) | IE_MTIE | IE_SSIE);
 
-  w_csr(mie, r_csr(mie) | (1 << 7) | (1 << 1));
-  unsigned int mstatus = r_csr(mstatus);
-
-  w_csr(mstatus, mstatus | (1 << 1));
+  w_csr(mstatus, r_csr(mstatus) | STATUS_MIE);
 }
 void start() {
   w_csr(pmpaddr0, 0xffffffff);
-  w_csr(pmpcfg0, 0xf);
+  w_csr(pmpcfg0, PMP_R | PMP_W | PMP_X | PMP_A_TOR);
   w_csr(medeleg, 0xffff);
   w_csr(mideleg, 0xffff);
   time_init();
   // M mode -> S Mode 修改mstatus
   unsigned int mstatus = r_csr(mstatus);
-  mstatus &= ~(3 << 11);
-  mstatus |= (1 << 11);
+  mstatus &= ~STATUS_MPP;
+  mstatus |= STATUS_MPP_S;
   w_csr(mstatus, mstatus);
   w_csr(mepc, (int)main);
   asm volatile("mret");
