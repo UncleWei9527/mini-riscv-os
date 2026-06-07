@@ -36,7 +36,13 @@ trap_vector:
   sw x29, 116(sp)
   sw x30, 120(sp)
   sw x31, 124(sp)
-  call trap_handler 
+#保存了中断地址
+  csrr t0,sepc 
+  sw t0,0(sp)
+  call trap_handler
+
+  lw t0,0(sp)
+  csrw sepc,t0 
   lw x1, 4(sp)
   lw x3, 12(sp)
   lw x4, 16(sp)

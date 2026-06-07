@@ -1,7 +1,7 @@
 # 极简清爽版 Makefile (注意命令前必须是真实的 Tab 键)
 
 CC = riscv64-unknown-elf-gcc
-CFLAGS = -march=rv32im_zicsr -mabi=ilp32 -mcmodel=medany -ffreestanding -nostdlib -O0 -g
+CFLAGS = -march=rv32ima_zicsr -mabi=ilp32 -mcmodel=medany -ffreestanding -nostdlib -O0 -g
 QEMU = qemu-system-riscv32
 QFLAGS = -machine virt -bios none -kernel os.elf -nographic
 

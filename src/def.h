@@ -4,7 +4,7 @@
 #define CLINT_BASE 0x2000000L
 #define CLINT_MTIMECMP (CLINT_BASE + 0x4000) // 闹钟
 #define CLINT_MTIME (CLINT_BASE + 0xBFF8)
-#define INTERVAL 1000000 // 0.1s
+#define INTERVAL 100 // 0.1s
 #define r_csr(reg)                                                             \
   ({                                                                           \
     unsigned int tmp;                                                          \

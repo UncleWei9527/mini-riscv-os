@@ -1,5 +1,22 @@
 #include "def.h"
+extern void forkret();
 extern void switch_to(struct Context *old_context, struct Context *new_context);
+int uart_lock = 0;
+void spin_lock() {
+  int old_val;
+  while (1) {
+    __asm__ volatile("amoswap.w.aq %0 ,%1 ,(%2)"
+                     : "=r"(old_val)
+                     : "r"(1), "r"(&uart_lock)
+                     : "memory");
+    if (old_val == 0) {
+      break;
+    }
+  }
+}
+void spin_unlock() {
+  __asm__ volatile("amoswap.w.rl x0,x0,(%0)" : : "r"(&uart_lock) : "memory");
+}
 void uart_putc(char c) { UARTC = c; }
 void print_string(const char *s) {
   while (*s) {
@@ -31,30 +48,41 @@ struct Task task1, task2;
 struct Task *current_task;
 void task_func1() {
   int cnt = 0;
-  w_csr(sstatus, r_csr(sstatus) | STATUS_SIE);
   while (1) {
-    print_string("func1 is working!!! cnt :");
-    print_int(cnt++);
-    print_string("\n");
-    delay(500000);
+    spin_lock();
+    // print_string("func1 is working!!! cnt :");
+    // print_int(cnt++);
+    print_string("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n");
+    spin_unlock();
+    // delay(500000);
   }
 }
 void task_func2() {
-  w_csr(sstatus, r_csr(sstatus) | STATUS_SIE);
   int cnt = 0;
   while (1) {
-    print_string("func2 is working!!! cnt:");
-    print_int(cnt++);
-    print_string("\n");
-    delay(500000);
+    int sum = 0;
+    for (int j = 0; j < cnt; j++) {
+      sum += j;
+    }
+    spin_lock();
+    // print_string("sum: ");
+    // print_int(sum);
+    // print_string("func2 is working!!! cnt:");
+    // print_int(cnt++);
+    print_string("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\n");
+    spin_unlock();
+    // delay(500000);
   }
 }
 void task_init() {
-  task1.ctx.ra = (unsigned int)task_func1;
-  task2.ctx.ra = (unsigned int)task_func2;
+  task1.ctx.ra = (unsigned int)forkret;
+  task2.ctx.ra = (unsigned int)forkret;
 
-  task1.ctx.sp = (unsigned int)(&task1.stack[4095]);
-  task2.ctx.sp = (unsigned int)(&task2.stack[4095]);
+  task1.ctx.s1 = (unsigned int)task_func1;
+  task2.ctx.s1 = (unsigned int)task_func2;
+
+  task1.ctx.sp = (unsigned int)(&task1.stack[4096]);
+  task2.ctx.sp = (unsigned int)(&task2.stack[4096]);
   current_task = &task1;
 }
 
@@ -65,7 +93,7 @@ void trap_handler() {
   int is_interupt = (cause & CAUSE_INT_MASK) != 0;
   unsigned int cause_code = (cause & CAUSE_CODE_MASK);
   if (is_interupt) {
-    print_string("received a interrupt !!!!\n");
+    // print_string("received a interrupt !!!!\n");
     w_csr(sip, 0); // 关掉门铃
     struct Task *old_task = current_task;
     if (current_task == &task1) {
