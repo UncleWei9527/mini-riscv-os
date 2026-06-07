@@ -61,8 +61,22 @@ struct Context {
   unsigned int s10;
   unsigned int s11;
 };
+struct TrapFrame {
+  unsigned int epc;
+  unsigned int ra;
+  unsigned int sp;
+  unsigned int gp;
+  unsigned int tp;
+  unsigned int t0, t1, t2;
+  unsigned int s0, s1;
+  unsigned int a0, a1, a2, a3, a4, a5, a6, a7;
+  unsigned int s2, s3, s4, s5, s6, s7, s8, s9, s10, s11;
+  unsigned int t3, t4, t5, t6;
+};
+#define MAX_TASK 10
 struct Task {
   struct Context ctx;
-  // int state; // 0 空闲 1 运行就绪
+  int state; // 0 空闲 1 运行就绪
+  int pid;   // 进程id
   char stack[4096];
 };

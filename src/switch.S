@@ -40,8 +40,10 @@ switch_to:
 .align 4 
 .global forkret
 forkret :
-  csrw sepc ,s1 
-  li t0 ,0x120 
+  csrw sepc ,s1
+  li t0,0x100 
+  csrc sstatus,t0
+  li t0 ,0x20 
   csrs sstatus,t0 
 
   sret 

@@ -39,6 +39,7 @@ trap_vector:
 #保存了中断地址
   csrr t0,sepc 
   sw t0,0(sp)
+  mv a0,sp
   call trap_handler
 
   lw t0,0(sp)
