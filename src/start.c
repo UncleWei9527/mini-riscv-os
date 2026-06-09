@@ -27,7 +27,15 @@ void time_init() {
   // 开启定时器中断
   w_csr(mie, r_csr(mie) | IE_MTIE | IE_SSIE);
 
-  w_csr(mstatus, r_csr(mstatus) | STATUS_MIE);
+  // w_csr(mstatus, r_csr(mstatus) | STATUS_MIE);
+}
+extern char __bss_end[];
+extern char __bss_start[];
+void bss_init()
+{
+  for (char *p = __bss_start; p < __bss_end; p++) {
+    *p = 0;
+}
 }
 void start() {
   w_csr(pmpaddr0, 0xffffffff);
@@ -39,6 +47,7 @@ void start() {
   unsigned int mstatus = r_csr(mstatus);
   mstatus &= ~STATUS_MPP;
   mstatus |= STATUS_MPP_S;
+  mstatus |= STATUS_SPIE;
   w_csr(mstatus, mstatus);
   w_csr(mepc, (int)main);
   asm volatile("mret");

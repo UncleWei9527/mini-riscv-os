@@ -1,15 +1,5 @@
 #include "def.h"
 extern void forkret();
-void sys_print(const char *s) {
-  __asm__ volatile("mv a7,%0\n"
-                   "mv a0,%1\n"
-                   "ecall\n"
-                   :
-                   : "r"(1), "r"(s)
-                   : "a0", "a7"
-
-  );
-}
 extern void switch_to(struct Context *old_context, struct Context *new_context);
 int uart_lock = 0;
 void spin_lock() {
@@ -55,6 +45,18 @@ void print_string(const char *s) {
     s++;
   }
 }
+// 专门用来打印内存地址的法医工具
+void print_hex(unsigned int val) {
+  print_string("0x");
+  char buf[9];
+  for (int i = 7; i >= 0; i--) {
+    int digit = val & 0xF;
+    buf[i] = digit < 10 ? '0' + digit : 'A' + digit - 10;
+    val >>= 4;
+  }
+  buf[8] = '\0';
+  print_string(buf);
+}
 void print_int(unsigned int cnt) {
   if (cnt == 0) {
     uart_putc('0');
@@ -79,24 +81,47 @@ void delay(int times) {
 void task_func1() {
   int cnt = 0;
   // w_csr(sstatus, 0);
+  printf("%s\n", __FUNCTION__);
   while (1) {
-    sys_print("func[1] is working !!! \n");
+     printf("task func working\n");
+    int *arr = (int *)malloc(sizeof(int) * 3);
+    arr[0]=cnt;
+    
+    arr[0] = cnt;
+    arr[1] = cnt * 10;
+    arr[2] = cnt * 100;
+    printf("func[1] is working arr[0]:%d arr[1]:%d arr[2]:%d !!! \n", arr[0],
+           arr[1], arr[2]);
+    cnt++;
+    // free(arr);
     delay(50000);
   }
 }
 
 void task_func2() {
+  printf("%s\n", __FUNCTION__);
   int cnt = 0;
   while (1) {
-    sys_print("func[2] is working !!! \n");
+
+    printf("func[2] is working !!! cnt:%d\n", cnt++);
     delay(50000);
   }
 }
 
 void task_func3() {
   int cnt = 0;
+  printf("%s\n", __FUNCTION__);
+  malloc(16);
   while (1) {
-    sys_print("func[3] is working !!! \n");
+    //printf("func[2] is working !!! cnt:%d\n", cnt++);
+    int *arr = (int *)malloc(sizeof(int) * 3);
+    arr[0] = cnt;
+    arr[1] = cnt * 10;
+    arr[2] = cnt * 100;
+    printf("func[3] is working arr[0]:%d arr[1]:%d arr[2]:%d !!! \n", arr[0],
+           arr[1], arr[2]);
+    cnt++;
+    free(arr);
     delay(50000);
   }
 }
@@ -121,27 +146,62 @@ void trap_handler(struct TrapFrame *tf) {
         break;
       }
     }
+    // print_string("进程正在调度\n");
     switch_to(&old_task->ctx, &current_task->ctx);
 
   } else {
     if (cause_code == 9) {
       print_string("system call from S-Mode \n");
+
     } else if (cause_code == 8) {
       unsigned int syscall_num = tf->a7;
       unsigned int arg0 = tf->a0;
+      // print_string("syscall_num:");
+      // print_int(syscall_num);
       if (syscall_num == 1) {
-        spin_lock();
+        // spin_lock();
         print_string("Syscall:");
         print_string((char *)arg0);
-        spin_unlock();
+         //spin_unlock();
+      }
+      // malloc
+      else if (syscall_num == 2) {
+        // spin_lock();
+
+         void *ptr = sys_malloc((int)arg0);
+        
+        // // 🌟 探针：逼大管家喊出他到底分出了什么地址！
+        // print_string(" | sys_malloc return ptr: ");
+        // print_hex((unsigned int)ptr);
+        // print_string("\n");
+
+        tf->a0 = (unsigned int)ptr;
+        // spin_unlock();
+      }
+      // free
+      else if (syscall_num == 3) {
+        // spin_lock();
+        sys_free((void *)arg0);
+
+        // spin_unlock();
       }
       tf->epc += 4;
     } else {
-      print_string("\n[KERNEL] CPU Caught a Crime!!! cause code:");
-      print_int(cause_code);
+      unsigned int stval = r_csr(stval); 
+      
+      print_string("\n==================================\n");
+      print_string("[KERNEL PANIC] CPU Caught a Crime!!!\n");
+      print_string("Cause Code: "); print_int(cause_code); print_string("\n");
+      
+      print_string("Death PC (sepc): "); 
+      print_hex(sepc); // 肇事指令地址
       print_string("\n");
-      while (1) {
-      }
+      
+      print_string("Bad Address (stval): "); 
+      print_hex(stval); // 被破坏的非法内存地址
+      print_string("\n==================================\n");
+      
+      while (1) {} // 保护现场，停机
     }
     w_csr(sepc, sepc);
   }
@@ -153,9 +213,10 @@ int main() {
   print_string("Hello RISCV OS!!!");
   print_string("after trap_handler\n");
 
+  malloc_init();
   task_init();
   create_task(task_func1);
-  create_task(task_func2);
+  // create_task(task_func2);
   create_task(task_func3);
   current_task = &task_pool[0];
   struct Context dummy_context;

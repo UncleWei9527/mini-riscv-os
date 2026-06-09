@@ -4,10 +4,12 @@ CC = riscv64-unknown-elf-gcc
 CFLAGS = -march=rv32ima_zicsr -mabi=ilp32 -mcmodel=medany -ffreestanding -nostdlib -O0 -g
 QEMU = qemu-system-riscv32
 QFLAGS = -machine virt -bios none -kernel os.elf -nographic
-
+INC = src/def.h 
+SRC = src/stdio.c src/malloc.c  src/entry.S src/start.c src/main.c  src/trap.S  src/switch.S 
+LD  = os.ld 
 # 1. 核心编译规则
-os.elf: src/entry.S src/start.c src/main.c os.ld src/trap.S src/def.h src/switch.S  
-	$(CC) $(CFLAGS) -T os.ld src/entry.S src/start.c src/main.c src/trap.S src/switch.S -o os.elf
+os.elf: $(SRC)  $(INC) $(LD)
+	$(CC) $(CFLAGS) -T  $(LD) $(SRC) -o os.elf
 
 # 2. 清理
 clean:
@@ -26,9 +28,10 @@ debug: os.elf
 gdb:
 	gdb-multiarch os.elf -ex "target remote localhost:1234" -ex "b main" -ex "layout src"
 # 危险而暴力的单终端一键调试
-oneline-debug: all
+oneline-debug: os.elf
+	
 	@echo "启动 QEMU 放入后台..."
-	$(QEMU) $(QEMUOPTS) -S -s &
+	$(QEMU) $(QFLAGS) -S -s &
 	@sleep 1
 	@echo "启动 GDB..."
-	gdb-multiarch os.elf -ex "target remote localhost:1234" -ex "b main" -ex "layout src"
+	gdb-multiarch os.elf -ex "target remote localhost:1234" -ex "b main" -ex "layout src" 

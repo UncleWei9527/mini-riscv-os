@@ -1,4 +1,5 @@
 #pragma once
+#define NULL 0
 #define UART0 0x10000000L
 #define UARTC (*(volatile unsigned char *)(UART0))
 #define CLINT_BASE 0x2000000L
@@ -80,3 +81,11 @@ struct Task {
   int pid;   // 进程id
   char stack[4096];
 };
+
+void printf(const char *fmt, ...);
+void sys_print(const char *s);
+void *sys_malloc(int size);
+void sys_free(void *ptr);
+void *malloc(int size);
+void free(void *ptr);
+void malloc_init();
