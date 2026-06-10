@@ -1,7 +1,9 @@
 #include "def.h"
 extern void trap_return_asm(struct TrapFrame*tf);
-
 extern void switch_to(struct Context *old_context, struct Context *new_context);
+
+
+
 int uart_lock = 0;
 void spin_lock() {
   int old_val;
@@ -32,11 +34,9 @@ void forkret()
 }
 int create_task(void (*entry)()) {
   for (int i = 0; i < MAX_TASK; i++) {
-    if (task_pool[i].state == 0) {
-      task_pool[i].state = 1;
+    if (task_pool[i].state == UNUSED) {
+      task_pool[i].state = RUNNABLE;
       task_pool[i].pid = i + 1;
-      
-      
      // 使用 & ~15 抹平最后 4 个二进制位，强行 16 字节对齐！保命神技！
       task_pool[i].tf.epc = (unsigned int)entry; 
       task_pool[i].tf.x2_sp = ((unsigned int)(&task_pool[i].user_stack[4096])) & ~15; 
@@ -95,7 +95,8 @@ void task_func1() {
   int cnt = 0;
   // w_csr(sstatus, 0);
   printf("%s\n", __FUNCTION__);
-  while (1) {
+  int i=0;
+  while (i++<20) {
     int *arr = (int *)malloc(sizeof(int) * 3);
     arr[0]=cnt;
     
@@ -108,16 +109,19 @@ void task_func1() {
     free(arr);
     delay(50000);
   }
+  exit(10);
 }
 
 void task_func2() {
   printf("%s\n", __FUNCTION__);
   int cnt = 0;
-  while (1) {
+  int i=0;
+  while (i++<10) {
 
     printf("func[2] is working !!! cnt:%d\n", cnt++);
     delay(50000);
   }
+  exit(233);
 }
 
 void task_func3() {
@@ -138,7 +142,45 @@ void task_func3() {
     delay(50000);
   }
 }
+void exit(int status)
+{
+    register unsigned int a7 asm("a7") = 4;
+    register unsigned int a0 asm("a0") = status;
 
+    __asm__ volatile("ecall" : : "r"(a7), "r"(a0) : "memory");
+}
+void sys_exit(int status)
+{
+  struct Context*old_ctx=&current_task->ctx;
+  current_task->exit_code=status;
+  current_task->state=ZOMBIE;
+  //查找下个runnable 进程
+  int current_id = current_task - task_pool;
+  int next_id = current_id;
+  print_string("TASK: ");
+  print_int(current_id);
+  print_string(" exit with ");
+  print_int( status);
+  print_string("\n");
+  int loop_count=0;
+  while (1)
+  {
+    next_id = (next_id + 1) % MAX_TASK;
+    if (task_pool[next_id].state == RUNNABLE)
+    {
+      current_task = &task_pool[next_id];
+      current_task->state = RUNNING;
+      break;
+    }
+    loop_count++;
+    if (loop_count >= MAX_TASK) {
+      print_string("\n[KERNEL PANIC] No runnable tasks! System HALT!\n");
+      while(1); // 停机
+    }
+  }
+  switch_to(old_ctx,&current_task->ctx);
+
+}
 void trap_handler() { 
   struct TrapFrame *tf = &current_task->tf; // 直接拿结构体
   
@@ -151,13 +193,23 @@ void trap_handler() {
     struct Task *old_task = current_task;
     int current_id = current_task - task_pool;
     int next_id = current_id;
+    current_task->state=RUNNABLE;
+    int loop_count=0;
     while (1) {
       next_id = (next_id + 1) % MAX_TASK;
-      if (task_pool[next_id].state == 1) {
+      if (task_pool[next_id].state == RUNNABLE) {
+
         current_task = &task_pool[next_id];
+        current_task->state=RUNNING;
         break;
       }
-      
+      loop_count++;
+      if (loop_count >= MAX_TASK)
+      {
+        print_string("\n[KERNEL PANIC] No runnable tasks! System HALT!\n");
+        while (1)
+          ; // 停机
+      }
     }
     // 任务切换
     switch_to(&old_task->ctx, &current_task->ctx);
@@ -184,6 +236,12 @@ void trap_handler() {
         void*ptr=(void*)tf->x10_a0;
         sys_free(ptr);
       }
+      //exit 
+      else if(syscall_num==4)
+      {
+        int exit_code=(int)tf->x10_a0;
+        sys_exit(exit_code);
+      }
       // free ...
     } else {
        print_string("exception:");
@@ -206,10 +264,10 @@ int main() {
   print_string("after trap_handler\n");
 
   malloc_init();
-  int pid1=create_task(task_func1);
+  create_task(task_func1);
   create_task(task_func2);
-  create_task(task_func3);
-  current_task = &task_pool[pid1];
+  //create_task(task_func3);
+  current_task = &task_pool[0];
   struct Context dummy_context;
   switch_to(&dummy_context, &current_task->ctx);
 
