@@ -1,5 +1,6 @@
 #include "def.h"
-extern void forkret();
+extern void trap_return_asm(struct TrapFrame*tf);
+
 extern void switch_to(struct Context *old_context, struct Context *new_context);
 int uart_lock = 0;
 void spin_lock() {
@@ -19,19 +20,31 @@ void spin_unlock() {
 }
 struct Task task_pool[MAX_TASK];
 struct Task *current_task;
-void task_init() {
-  for (int i = 0; i < MAX_TASK; i++) {
-    task_pool[i].pid = 0;
-  }
+//S Mode->U Mode
+void forkret()
+{
+  unsigned int sstatus = r_csr(sstatus);
+  sstatus &= ~STATUS_SPP; 
+  w_csr(sstatus, sstatus);
+  
+  // 借助汇编跳入用户态
+  trap_return_asm(&current_task->tf);
 }
 int create_task(void (*entry)()) {
   for (int i = 0; i < MAX_TASK; i++) {
     if (task_pool[i].state == 0) {
       task_pool[i].state = 1;
       task_pool[i].pid = i + 1;
-      task_pool[i].ctx.ra = (unsigned int)forkret;
-      task_pool[i].ctx.s1 = (unsigned int)entry;
-      task_pool[i].ctx.sp = (unsigned int)(&task_pool[i].stack[4096]);
+      
+      
+     // 使用 & ~15 抹平最后 4 个二进制位，强行 16 字节对齐！保命神技！
+      task_pool[i].tf.epc = (unsigned int)entry; 
+      task_pool[i].tf.x2_sp = ((unsigned int)(&task_pool[i].user_stack[4096])) & ~15; 
+      task_pool[i].tf.kernel_sp = ((unsigned int)(&task_pool[i].kernel_stack[4096])) & ~15; 
+      
+      task_pool[i].ctx.ra = (unsigned int)forkret; 
+      task_pool[i].ctx.sp = ((unsigned int)(&task_pool[i].kernel_stack[4096])) & ~15;
+      
       return task_pool[i].pid;
     }
   }
@@ -83,7 +96,6 @@ void task_func1() {
   // w_csr(sstatus, 0);
   printf("%s\n", __FUNCTION__);
   while (1) {
-     printf("task func working\n");
     int *arr = (int *)malloc(sizeof(int) * 3);
     arr[0]=cnt;
     
@@ -93,7 +105,7 @@ void task_func1() {
     printf("func[1] is working arr[0]:%d arr[1]:%d arr[2]:%d !!! \n", arr[0],
            arr[1], arr[2]);
     cnt++;
-    // free(arr);
+    free(arr);
     delay(50000);
   }
 }
@@ -109,6 +121,7 @@ void task_func2() {
 }
 
 void task_func3() {
+ // asm volatile("li sp, 0");
   int cnt = 0;
   printf("%s\n", __FUNCTION__);
   malloc(16);
@@ -126,85 +139,64 @@ void task_func3() {
   }
 }
 
-void trap_handler(struct TrapFrame *tf) {
-
-  unsigned int sepc = r_csr(sepc); // 中断sepc 指向下一条指令 异常指向错误的指令
+void trap_handler() { 
+  struct TrapFrame *tf = &current_task->tf; // 直接拿结构体
+  
   unsigned int cause = r_csr(scause);
   int is_interupt = (cause & CAUSE_INT_MASK) != 0;
   unsigned int cause_code = (cause & CAUSE_CODE_MASK);
+
   if (is_interupt) {
-    // print_string("received a interrupt !!!!\n");
-    w_csr(sip, 0); // 关掉门铃
+    w_csr(sip, 0); 
     struct Task *old_task = current_task;
     int current_id = current_task - task_pool;
     int next_id = current_id;
     while (1) {
       next_id = (next_id + 1) % MAX_TASK;
-
       if (task_pool[next_id].state == 1) {
         current_task = &task_pool[next_id];
         break;
       }
+      
     }
-    // print_string("进程正在调度\n");
+    // 任务切换
     switch_to(&old_task->ctx, &current_task->ctx);
-
   } else {
-    if (cause_code == 9) {
-      print_string("system call from S-Mode \n");
-
-    } else if (cause_code == 8) {
-      unsigned int syscall_num = tf->a7;
-      unsigned int arg0 = tf->a0;
-      // print_string("syscall_num:");
-      // print_int(syscall_num);
+    // 处理异常
+    if (cause_code == 8) { 
+      tf->epc += 4;  // 【注意】这里不再是修改 tf->epc，因为我们从 tf 里拿
+      
+      unsigned int syscall_num = tf->x17_a7;
+      unsigned int arg0 = tf->x10_a0;
+      //printf
       if (syscall_num == 1) {
-        // spin_lock();
         print_string("Syscall:");
-        print_string((char *)arg0);
-         //spin_unlock();
+        print_string((char *)arg0); 
       }
-      // malloc
+      //malloc
       else if (syscall_num == 2) {
-        // spin_lock();
-
-         void *ptr = sys_malloc((int)arg0);
-        
-        // // 🌟 探针：逼大管家喊出他到底分出了什么地址！
-        // print_string(" | sys_malloc return ptr: ");
-        // print_hex((unsigned int)ptr);
-        // print_string("\n");
-
-        tf->a0 = (unsigned int)ptr;
-        // spin_unlock();
+        void *ptr = sys_malloc((int)arg0);
+        tf->x10_a0 = (unsigned int)ptr; // 把返回值写回 tf
       }
-      // free
-      else if (syscall_num == 3) {
-        // spin_lock();
-        sys_free((void *)arg0);
-
-        // spin_unlock();
+      //free
+      else if(syscall_num==3)
+      {
+        void*ptr=(void*)tf->x10_a0;
+        sys_free(ptr);
       }
-      tf->epc += 4;
+      // free ...
     } else {
-      unsigned int stval = r_csr(stval); 
-      
-      print_string("\n==================================\n");
-      print_string("[KERNEL PANIC] CPU Caught a Crime!!!\n");
-      print_string("Cause Code: "); print_int(cause_code); print_string("\n");
-      
-      print_string("Death PC (sepc): "); 
-      print_hex(sepc); // 肇事指令地址
-      print_string("\n");
-      
-      print_string("Bad Address (stval): "); 
-      print_hex(stval); // 被破坏的非法内存地址
-      print_string("\n==================================\n");
-      
-      while (1) {} // 保护现场，停机
+       print_string("exception:");
+       print_int(cause_code);
+       while(1)
+       {
+
+       }
     }
-    w_csr(sepc, sepc);
   }
+
+  // 万剑归宗！无论是系统调用完，还是 switch_to 切回来的进程，统统从这里返回用户态！
+  trap_return_asm(tf); 
 }
 extern void trap_vector();
 
@@ -214,11 +206,10 @@ int main() {
   print_string("after trap_handler\n");
 
   malloc_init();
-  task_init();
-  create_task(task_func1);
-  // create_task(task_func2);
+  int pid1=create_task(task_func1);
+  create_task(task_func2);
   create_task(task_func3);
-  current_task = &task_pool[0];
+  current_task = &task_pool[pid1];
   struct Context dummy_context;
   switch_to(&dummy_context, &current_task->ctx);
 
@@ -226,3 +217,4 @@ int main() {
     print_string("never reach main loop !!!\n");
   }
 }
+//switch_to get context ra->forkret (to User Mode)->trap_return_asm

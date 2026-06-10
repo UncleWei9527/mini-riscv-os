@@ -1,83 +1,111 @@
-
-.section .text 
-.align 4 
+.section .text
+.align 4
 .global trap_vector
 trap_vector:
-  addi sp,sp,-128 
+  # 【神来之笔】：原子交换 SP 和 SSCRATCH
+  # 交换前：sp 是危险的用户栈，sscratch 保存着当前任务 tf 的地址
+  # 交换后：sp 变成了 tf 的地址！sscratch 暂存了用户的 sp！
+  csrrw sp, sscratch, sp
+
+  # 1. 此时 sp 是 tf 结构体，直接疯狂保存用户现场
+  sw x1, 8(sp)
+  sw t0, 24(sp)#提前save t0
+  # 将暂存在 sscratch 里的用户 SP 拿出来，存入 tf 的 x2_sp 字段 (偏移12)
+  csrr t0, sscratch
+  sw t0, 12(sp)
+
+  sw x3, 16(sp)
+  sw x4, 20(sp)
+  sw x6, 28(sp)
+  sw x7, 32(sp)
+  sw x8, 36(sp)
+  sw x9, 40(sp)
+  sw x10, 44(sp)
+  sw x11, 48(sp)
+  sw x12, 52(sp)
+  sw x13, 56(sp)
+  sw x14, 60(sp)
+  sw x15, 64(sp)
+  sw x16, 68(sp)
+  sw x17, 72(sp)
+  sw x18, 76(sp)
+  sw x19, 80(sp)
+  sw x20, 84(sp)
+  sw x21, 88(sp)
+  sw x22, 92(sp)
+  sw x23, 96(sp)
+  sw x24, 100(sp)
+  sw x25, 104(sp)
+  sw x26, 108(sp)
+  sw x27, 112(sp)
+  sw x28, 116(sp)
+  sw x29, 120(sp)
+  sw x30, 124(sp)
+  sw x31, 128(sp)
+
+  # 2. 保存用户被打断时的 PC到epc
+  csrr t0, sepc
+  sw t0, 4(sp)
+
+  # 3. 气闸舱关闭，加载真正的内核栈！
+  # tf 的第 0 个字节 (kernel_sp) 存的就是内核栈地址
+  lw sp, 0(sp)
   
-# 除了sp和x0 以外都不用保存
-  sw x1, 4(sp)
-  sw x3, 12(sp)
-  sw x4, 16(sp)
-  sw x5, 20(sp)
-  sw x6, 24(sp)
-  sw x7, 28(sp)
-  sw x8, 32(sp)
-  sw x9, 36(sp)
-  sw x10, 40(sp)
-  sw x11, 44(sp)
-  sw x12, 48(sp)
-  sw x13, 52(sp)
-  sw x14, 56(sp)
-  sw x15, 60(sp)
-  sw x16, 64(sp)
-  sw x17, 68(sp)
-  sw x18, 72(sp)
-  sw x19, 76(sp)
-  sw x20, 80(sp)
-  sw x21, 84(sp)
-  sw x22, 88(sp)
-  sw x23, 92(sp)
-  sw x24, 96(sp)
-  sw x25, 100(sp)
-  sw x26, 104(sp)
-  sw x27, 108(sp)
-  sw x28, 112(sp)
-  sw x29, 116(sp)
-  sw x30, 120(sp)
-  sw x31, 124(sp)
-#保存了中断地址
-  csrr t0,sepc 
-  sw t0,0(sp)
-  mv a0,sp
+  # 直接跳入 C 语言内核 (注意：这里不需要传参了)
   call trap_handler
+# 专属的返回函数 (类似 xv6 的 userret)
+.align 4
+.global trap_return_asm
+trap_return_asm:
+  # C 语言调用时会把 tf 的地址通过 a0 传进来
+  mv sp, a0
 
-  lw t0,0(sp)
-  csrw sepc,t0 
-  lw x1, 4(sp)
-  lw x3, 12(sp)
-  lw x4, 16(sp)
-  lw x5, 20(sp)
-  lw x6, 24(sp)
-  lw x7, 28(sp)
-  lw x8, 32(sp)
-  lw x9, 36(sp)
-  lw x10, 40(sp)
-  lw x11, 44(sp)
-  lw x12, 48(sp)
-  lw x13, 52(sp)
-  lw x14, 56(sp)
-  lw x15, 60(sp)
-  lw x16, 64(sp)
-  lw x17, 68(sp)
-  lw x18, 72(sp)
-  lw x19, 76(sp)
-  lw x20, 80(sp)
-  lw x21, 84(sp)
-  lw x22, 88(sp)
-  lw x23, 92(sp)
-  lw x24, 96(sp)
-  lw x25, 100(sp)
-  lw x26, 104(sp)
-  lw x27, 108(sp)
-  lw x28, 112(sp)
-  lw x29, 116(sp)
-  lw x30, 120(sp)
-  lw x31, 124(sp)
+  # 1. 恢复 sepc
+  lw t0, 4(sp)
+  csrw sepc, t0
 
-  
-  addi sp,sp,128 
-  sret 
+  # 2. 保存an当期trap_frame到sscratch里面
+  csrw sscratch, sp
+
+  # 3. 恢复通用寄存器
+  lw x1, 8(sp)
+  lw x3, 16(sp)
+  lw x4, 20(sp)
+  lw x5, 24(sp)
+  lw x6, 28(sp)
+  lw x7, 32(sp)
+  lw x8, 36(sp)
+  lw x9, 40(sp)
+  lw x10, 44(sp)
+  lw x11, 48(sp)
+  lw x12, 52(sp)
+  lw x13, 56(sp)
+  lw x14, 60(sp)
+  lw x15, 64(sp)
+  lw x16, 68(sp)
+  lw x17, 72(sp)
+  lw x18, 76(sp)
+  lw x19, 80(sp)
+  lw x20, 84(sp)
+  lw x21, 88(sp)
+  lw x22, 92(sp)
+  lw x23, 96(sp)
+  lw x24, 100(sp)
+  lw x25, 104(sp)
+  lw x26, 108(sp)
+  lw x27, 112(sp)
+  lw x28, 116(sp)
+  lw x29, 120(sp)
+  lw x30, 124(sp)
+  lw x31, 128(sp)
+
+  # 4. 最后一步，恢复用户的真实 SP
+  lw sp, 12(sp)
+
+  # 降维飞回用户态
+  sret
+
+
 
   .align 4 
   .global timervec 

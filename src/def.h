@@ -5,7 +5,7 @@
 #define CLINT_BASE 0x2000000L
 #define CLINT_MTIMECMP (CLINT_BASE + 0x4000) // 闹钟
 #define CLINT_MTIME (CLINT_BASE + 0xBFF8)
-#define INTERVAL 100 // 0.1s
+#define INTERVAL 100000 // 0.1s
 #define r_csr(reg)                                                             \
   ({                                                                           \
     unsigned int tmp;                                                          \
@@ -63,23 +63,49 @@ struct Context {
   unsigned int s11;
 };
 struct TrapFrame {
-  unsigned int epc;
-  unsigned int ra;
-  unsigned int sp;
-  unsigned int gp;
-  unsigned int tp;
-  unsigned int t0, t1, t2;
-  unsigned int s0, s1;
-  unsigned int a0, a1, a2, a3, a4, a5, a6, a7;
-  unsigned int s2, s3, s4, s5, s6, s7, s8, s9, s10, s11;
-  unsigned int t3, t4, t5, t6;
-};
+  unsigned int kernel_sp; // 0: 保存内核栈的栈顶地址 (核心！)
+  unsigned int epc;       // 4: 保存被打断时的 PC
+  unsigned int x1_ra;     // 8
+  unsigned int x2_sp;     // 12: 存放真正的用户态 SP
+  unsigned int x3_gp;     // 16
+  unsigned int x4_tp;     // 20
+  unsigned int x5_t0;     // 24
+  unsigned int x6_t1;     // 28
+  unsigned int x7_t2;     // 32
+  unsigned int x8_s0;     // 36
+  unsigned int x9_s1;     // 40
+  unsigned int x10_a0;    // 44
+  unsigned int x11_a1;    // 48
+  unsigned int x12_a2;    // 52
+  unsigned int x13_a3;    // 56
+  unsigned int x14_a4;    // 60
+  unsigned int x15_a5;    // 64
+  unsigned int x16_a6;    // 68
+  unsigned int x17_a7;    // 72
+  unsigned int x18_s2;    // 76
+  unsigned int x19_s3;    // 80
+  unsigned int x20_s4;    // 84
+  unsigned int x21_s5;    // 88
+  unsigned int x22_s6;    // 92
+  unsigned int x23_s7;    // 96
+  unsigned int x24_s8;    // 100
+  unsigned int x25_s9;    // 104
+  unsigned int x26_s10;   // 108
+  unsigned int x27_s11;   // 112
+  unsigned int x28_t3;    // 116
+  unsigned int x29_t4;    // 120
+  unsigned int x30_t5;    // 124
+  unsigned int x31_t6;    // 128
+};  
 #define MAX_TASK 10
 struct Task {
   struct Context ctx;
   int state; // 0 空闲 1 运行就绪
   int pid;   // 进程id
-  char stack[4096];
+  struct TrapFrame tf;
+  char kernel_stack[4096];
+  char user_stack[4096];
+  
 };
 
 void printf(const char *fmt, ...);

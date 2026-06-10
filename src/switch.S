@@ -1,6 +1,7 @@
 .section .text 
 .align 4 
 .global switch_to
+# 
 switch_to:
  // 第一次存入 trap_handler里面的switch_to调用的下一句给dummy node  ra 是fork_ret(里面去到s1(task_func)执行) 
  // 第二次 进入的ra是和上面一致  ra加载fork_ret (里面去到 新的task_func执行)
@@ -37,13 +38,3 @@ switch_to:
 
 
   ret 
-.align 4 
-.global forkret
-forkret :
-  csrw sepc ,s1
-  li t0,0x100 
-  csrc sstatus,t0
-  li t0 ,0x20 
-  csrs sstatus,t0 
-
-  sret 
