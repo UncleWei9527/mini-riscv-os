@@ -1,5 +1,6 @@
 #include <stdarg.h>
 int uart_lock = 0;
+
 void spin_lock() {
   int old_val;
   while (1) {
@@ -85,4 +86,36 @@ void printf(const char *fmt, ...) {
   buf[pos] = '\0';
   sys_print(buf);
   va_end(args);
+}
+void *memcpy(void *dst, const void *src, unsigned int n) {
+  char *cdst = (char *)dst;
+  const char *csrc = (char *)src;
+  if (((unsigned int)cdst & 3) == ((unsigned int)csrc & 3)) {
+    while (n > 0 && ((unsigned int)cdst & 3)) {
+      *cdst++ = *csrc++;
+      n--;
+    }
+    unsigned int *wdst = (unsigned int *)cdst;
+    const unsigned int *wsrc = (const unsigned int *)csrc;
+    while (n >= 16) {
+      wdst[0] = wsrc[0];
+      wdst[1] = wsrc[1];
+      wdst[2] = wsrc[2];
+      wdst[3] = wsrc[3];
+      wdst += 4;
+      wsrc += 4;
+      n -= 16;
+    }
+    while (n >= 4) {
+      *wdst++ = *wsrc++;
+      n -= 4;
+    }
+    cdst = (char *)wdst;
+    csrc = (char *)wsrc;
+  }
+  while (n) {
+    *cdst++ = *csrc++;
+    n--;
+  }
+  return dst;
 }

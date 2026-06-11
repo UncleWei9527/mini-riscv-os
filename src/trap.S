@@ -60,14 +60,14 @@ trap_return_asm:
   # C 语言调用时会把 tf 的地址通过 a0 传进来
   mv sp, a0
 
-  # 1. 恢复 sepc
+  # 1. 恢复 sepc 第一次进来指向task_func 
   lw t0, 4(sp)
   csrw sepc, t0
 
   # 2. 保存an当期trap_frame到sscratch里面
   csrw sscratch, sp
 
-  # 3. 恢复通用寄存器
+  # 3.恢复当前trapframe
   lw x1, 8(sp)
   lw x3, 16(sp)
   lw x4, 20(sp)
@@ -102,7 +102,7 @@ trap_return_asm:
   # 4. 最后一步，恢复用户的真实 SP
   lw sp, 12(sp)
 
-  # 降维飞回用户态
+  # 降维飞回用户态 -> task_func 
   sret
 
 

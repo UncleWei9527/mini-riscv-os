@@ -126,3 +126,6 @@ void sys_exit(int status);
 void exit(int status);
 int wait(int *status);
 int sys_wait(int *status);
+int fork();
+int sys_fork();
+void *memcpy(void *dst, const void *src, unsigned int n);
