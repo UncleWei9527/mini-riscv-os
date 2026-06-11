@@ -1,4 +1,20 @@
 #include <stdarg.h>
+int uart_lock = 0;
+void spin_lock() {
+  int old_val;
+  while (1) {
+    __asm__ volatile("amoswap.w.aq %0 ,%1 ,(%2)"
+                     : "=r"(old_val)
+                     : "r"(1), "r"(&uart_lock)
+                     : "memory");
+    if (old_val == 0) {
+      break;
+    }
+  }
+}
+void spin_unlock() {
+  __asm__ volatile("amoswap.w.rl x0,x0,(%0)" : : "r"(&uart_lock) : "memory");
+}
 void sys_print(const char *s) {
   // 🌟 强行命令 GCC：这两个变量必须死死地绑定在 a7 和 a0 物理寄存器上！
   register unsigned int a7 asm("a7") = 1;

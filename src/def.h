@@ -96,11 +96,11 @@ struct TrapFrame {
   unsigned int x29_t4;    // 120
   unsigned int x30_t5;    // 124
   unsigned int x31_t6;    // 128
-};  
+};
 #define MAX_TASK 10
-#define UNUSED 0 
+#define UNUSED 0
 #define RUNNABLE 1
-#define RUNNING 2 
+#define RUNNING 2
 #define ZOMBIE 3
 struct Task {
   struct Task *parent;
@@ -111,9 +111,10 @@ struct Task {
   struct TrapFrame tf;
   char kernel_stack[4096];
   char user_stack[4096];
-  
 };
 
+void spin_lock();
+void spin_unlock();
 void printf(const char *fmt, ...);
 void sys_print(const char *s);
 void *sys_malloc(int size);
@@ -123,3 +124,5 @@ void free(void *ptr);
 void malloc_init();
 void sys_exit(int status);
 void exit(int status);
+int wait(int *status);
+int sys_wait(int *status);
